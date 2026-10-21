@@ -1,0 +1,71 @@
+%% ============================================================
+%  PROJET 1 bis : Étude de stabilité numérique
+%  -----------------------------------------------------------
+%  Auteur : Fafadji Ambroise YELOUH    |    Date : Novembre 2025
+%  -----------------------------------------------------------
+%  - Convergence de E_1(N) vers la valeur analytique
+%  - Estimation de l'ordre de convergence
+%  - Conditionnement de la matrice (précision flottante)
+%  - Sensibilité à une perturbation aléatoire de H
+%  ============================================================
+clear; close all; clc;
+
+hbar = 1.054571817e-34;
+m_e  = 9.1093837015e-31;
+eV   = 1.602176634e-19;
+L    = 5e-9;
+
+Ns      = [10 20 50 100 200 500 1000 2000];
+err_rel = zeros(size(Ns));
+cond_H  = zeros(size(Ns));
+
+% Référence analytique (n = 1)
+E1_ana = pi^2 * hbar^2/(2*m_e*L^2)/eV;
+
+for i = 1:length(Ns)
+    N = Ns(i);
+    h = L/(N+1);
+    T = (hbar^2/(2*m_e*h^2)) * ...
+        ( 2*diag(ones(N,1)) - diag(ones(N-1,1),1) - diag(ones(N-1,1),-1) );
+    E   = sort(eig(T))/eV;
+    err_rel(i) = abs(E(1) - E1_ana)/E1_ana;
+    cond_H(i)  = cond(T);
+end
+
+% ---- Ordre de convergence ----
+p = polyfit(log(1./ (Ns+1)), log(err_rel), 1);   % h ~ 1/(N+1)
+fprintf('Ordre de convergence estimé : %.2f (attendu ~ 2)\n', p(1));
+
+% ---- Conditionnement ----
+fprintf('\n   N      err_rel        cond(H)\n');
+for i = 1:length(Ns)
+    fprintf('  %5d   %.3e   %.3e\n', Ns(i), err_rel(i), cond_H(i));
+end
+
+% ---- Sensibilité à une perturbation ----
+% Désordre diagonal aléatoire d'amplitude eps*||H||
+N = 500; h = L/(N+1);
+T = (hbar^2/(2*m_e*h^2)) * ...
+    ( 2*diag(ones(N,1)) - diag(ones(N-1,1),1) - diag(ones(N-1,1),-1) );
+E0  = sort(eig(T))/eV;
+rng(0);
+eps_pert = 1e-6;
+E1_pert  = sort(eig(T + eps_pert*norm(T)*diag(randn(N,1))))/eV;
+fprintf('\nPerturbation relative E_1 : %.3e (eps = %.1e)\n', ...
+        abs(E1_pert(1)-E0(1))/E0(1), eps_pert);
+
+% ---- Tracé ----
+figure;
+loglog(Ns, err_rel, 'o-', 'LineWidth', 1.6, 'MarkerFaceColor','b'); hold on;
+ref = err_rel(1)*(Ns(1)./Ns).^2;
+loglog(Ns, ref, 'k--', 'LineWidth', 1.2);
+xlabel('N'); ylabel('Erreur relative sur E_1');
+title('Convergence : erreur ~ O(h^2)');
+legend('Numérique','Référence O(h^2)','Location','best');
+grid on;
+
+figure;
+loglog(Ns, cond_H, 's-', 'LineWidth', 1.6);
+xlabel('N'); ylabel('cond(H)');
+title('Conditionnement du Hamiltonien');
+grid on;

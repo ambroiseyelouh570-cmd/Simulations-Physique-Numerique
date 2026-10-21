@@ -1,0 +1,103 @@
+%% ============================================================
+%  PROJET 2 : Écoulements visqueux en conduite
+%  -----------------------------------------------------------
+%  Auteur : Fafadji Ambroise YELOUH    |    Date : Novembre 2025
+%  -----------------------------------------------------------
+%  Contenu :
+%   1) Profil de Poiseuille (laminaire établi)
+%   2) Débit en fonction de la pression motrice
+%   3) Nombre de Reynolds / transition
+%   4) Abaque de Moody (génération complète)
+%   5) Résolution de Colebrook–White
+%   6) Pertes de charge (Darcy–Weisbach)
+%  ============================================================
+clear; close all; clc;
+
+%% ------- Paramètres -------
+R    = 0.05;        % rayon = 5 cm
+L    = 10.0;        % longueur = 10 m
+mu   = 1.0e-3;      % viscosité dynamique (eau à 20°C)
+rho  = 1000;        % masse volumique
+dP   = 200;         % pression motrice [Pa]
+
+%% ============================================================
+%  1) PROFIL DE POISEUILLE
+%  u(r) = (dP/(4 mu L)) (R^2 - r^2)
+%  u_max = dP R^2 /(4 mu L)
+%  Q     = pi R^4 dP /(8 mu L)     (Hagen–Poiseuille)
+%  ============================================================
+r      = linspace(-R, R, 400);
+u      = dP/(4*mu*L) * (R^2 - r.^2);
+u_max  = dP*R^2/(4*mu*L);
+Q_th   = pi*R^4*dP/(8*mu*L);
+
+fprintf('--- Profil de Poiseuille ---\n');
+fprintf('  u_max = %.4f m/s\n', u_max);
+fprintf('  Q     = %.4e m^3/s\n', Q_th);
+
+% Vérification numérique du débit par intégration
+Q_num = 2*pi*trapz(r(abs(r)<=R), abs(r(abs(r)<=R)).*u(abs(r)<=R));
+fprintf('  Q (numérique) = %.4e m^3/s   |  écart = %.2e\n', ...
+        Q_num, abs(Q_num-Q_th)/Q_th);
+
+figure('Name','Poiseuille');
+plot(u, r*1e3, 'LineWidth', 1.8);
+xlabel('u(r) [m/s]'); ylabel('r [mm]');
+title(sprintf('Profil parabolique (dP = %g Pa)', dP));
+grid on;
+
+%% ============================================================
+%  2) NOMBRE DE REYNOLDS
+%  Re = rho * V_moyen * D / mu  ;  V_moyen = Q/(pi R^2)
+%  ============================================================
+D      = 2*R;
+V_moy  = Q_th/(pi*R^2);
+Re     = rho*V_moy*D/mu;
+fprintf('\n  V_moyen = %.4e m/s\n  Re = %.1f', V_moy, Re);
+if Re < 2300, fprintf('  -> régime LAMINAIRE\n');
+elseif Re < 4000, fprintf('  -> régime TRANSITIONNEL\n');
+else, fprintf('  -> régime TURBULENT\n'); end
+
+%% ============================================================
+%  3) ABAQUE DE MOODY
+%  Colebrook–White (turbulent) :
+%    1/sqrt(f) = -2 log10( eps/(3.7 D) + 2.51/(Re sqrt(f)) )
+%  Laminaire :  f = 64/Re
+%  ============================================================
+colebrook = @(Re, epsD) fzero( @(f) 1/sqrt(f) + ...
+               2*log10(epsD/3.7 + 2.51/(Re*sqrt(f))), 0.02 );
+
+Re_lam = logspace(log10(100), log10(2300), 200);
+Re_tur = logspace(log10(4000), log10(1e8), 400);
+
+epsD_list = [0 1e-5 5e-5 1e-4 5e-4 1e-3 5e-3 1e-2 5e-2];
+
+figure('Name','Abaque de Moody');
+loglog(Re_lam, 64./Re_lam, 'k-', 'LineWidth', 2); hold on;
+for epsD = epsD_list
+    f_tur = arrayfun(@(Re) colebrook(Re, epsD), Re_tur);
+    loglog(Re_tur, f_tur, 'LineWidth', 1.2, ...
+           'DisplayName', sprintf('\\epsilon/D = %.0e', epsD));
+end
+xlabel('Re'); ylabel('f'); title('Abaque de Moody');
+ylim([5e-3 0.2]); xlim([1e2 1e8]);
+legend('Location','southwest');
+grid on; grid minor;
+
+%% ============================================================
+%  4) PERTES DE CHARGE – DARCY–WEISBACH
+%  dP_loss = f * (L/D) * (rho V^2 / 2)
+%  ============================================================
+epsD = 1e-3;
+if Re < 2300
+    f = 64/Re;
+else
+    f = colebrook(Re, epsD);
+end
+dP_loss = f * (L/D) * (rho*V_moy^2/2);
+H_loss  = dP_loss/(rho*9.81);
+
+fprintf('\n--- Pertes de charge ---\n');
+fprintf('  f      = %.5f\n', f);
+fprintf('  dP     = %.3f Pa\n', dP_loss);
+fprintf('  H      = %.3f m\n', H_loss);
