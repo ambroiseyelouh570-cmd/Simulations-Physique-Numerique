@@ -23,3 +23,5 @@
 * **Date :** Novembre 2025
 * **Description :** Modélisation par différences finies. Comparaison quantitative entre le schéma explicite (Euler) et implicite (Crank-Nicolson).
 * ➡️ [Voir le code source](./diffusion_thermique_2D.py)
+
+* ➡️ 📄 **[Cliquez ici pour télécharger mon Portfolio détaillé au format PDF](./Fafadji_Ambroise_YELOUH_Portfolio.pdf)
