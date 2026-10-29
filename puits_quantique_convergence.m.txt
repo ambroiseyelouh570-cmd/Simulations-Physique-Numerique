@@ -1,71 +1,52 @@
-%% ============================================================
-%  PROJET 1 bis : Étude de stabilité numérique
-%  -----------------------------------------------------------
-%  Auteur : Fafadji Ambroise YELOUH    |    Date : Novembre 2025
-%  -----------------------------------------------------------
-%  - Convergence de E_1(N) vers la valeur analytique
-%  - Estimation de l'ordre de convergence
-%  - Conditionnement de la matrice (précision flottante)
-%  - Sensibilité à une perturbation aléatoire de H
-%  ============================================================
-clear; close all; clc;
-
-hbar = 1.054571817e-34;
-m_e  = 9.1093837015e-31;
-eV   = 1.602176634e-19;
-L    = 5e-9;
-
-Ns      = [10 20 50 100 200 500 1000 2000];
-err_rel = zeros(size(Ns));
-cond_H  = zeros(size(Ns));
-
-% Référence analytique (n = 1)
-E1_ana = pi^2 * hbar^2/(2*m_e*L^2)/eV;
-
-for i = 1:length(Ns)
-    N = Ns(i);
-    h = L/(N+1);
-    T = (hbar^2/(2*m_e*h^2)) * ...
-        ( 2*diag(ones(N,1)) - diag(ones(N-1,1),1) - diag(ones(N-1,1),-1) );
-    E   = sort(eig(T))/eV;
-    err_rel(i) = abs(E(1) - E1_ana)/E1_ana;
-    cond_H(i)  = cond(T);
+clear; close; clc
+Nx=2048; Nt=4000; dt=0.01/2; dx=0.05; m=1;
+x = 1:Nx; x=((x-Nx/2)*dx)';
+L=Nx*dx;
+% barriere :
+largeur=2;
+q = round(largeur/dx/2); V = zeros(Nx,1); P = round(Nx/2);
+V(P-q:P+q) = 1.5;
+plot(x,V,'b')
+% paquet d'onde
+kk0 = 2;
+xx0 = -20;
+sigma = 3;
+psi0 = (exp(-(x-xx0).*(x-xx0)/4/sigma/sigma+1j.*kk0.*x)/(2*pi*sigma^2)^.25);
+% pour le temps : iteration sur i
+dkx=2*pi/Nx/dx; k0=-pi/dx; kx=1:Nx; kx=(k0+kx*dkx)';
+psix = zeros(Nx,Nt); psik = zeros(Nx,Nt);
+psimk = zeros(Nx);
+psix(:,1)=psi0;
+psimx=dx/sqrt(2*pi).*psi0.*exp(-1j*k0.*x);
+for i=1:Nt-1
+  psimx=psimx.*exp(-1j.*dt/2.*V);
+  psimk=fft(psimx);
+  psimk=psimk.*exp(-1j.*kx.*kx*dt/2/m);
+  psimx=ifft(psimk);
+  psimx=psimx.*exp(-1j*dt/2.*V);
+  psix(:,i+1)=sqrt(2*pi)/dx.*psimx.*exp(1j*k0.*x);
+  psik(:,i+1)=psimk.*exp(-1j*x(1)*kx);
+end
+figure
+for i=101:100:4000
+  subplot(2,1,1), hold on
+  plot(x,abs(psix(:,i-100)),'w')
+  plot(x,real(psix(:,i-100)),'w')
+  plot(x,abs(psix(:,i)),'r')
+  plot(x,real(psix(:,i)),'r')
+  plot(x,V,'b')
+  axis([-50 50 -1 1])
+  xlabel("x")
+  ylabel("|psi|^2")
+  grid()
+  hold off
+  subplot(2,1,2), hold on
+  plot(kx,abs(psik(:,i-100)),'w')
+%  plot(kx,real(psik(:,i-100)),'w')
+  plot(kx,abs(psik(:,i)),'r')
+%  plot(kx,real(psik(:,i)),'b')
+  axis([-10 10 0 2])
+  hold off
+  pause(.1)
 end
 
-% ---- Ordre de convergence ----
-p = polyfit(log(1./ (Ns+1)), log(err_rel), 1);   % h ~ 1/(N+1)
-fprintf('Ordre de convergence estimé : %.2f (attendu ~ 2)\n', p(1));
-
-% ---- Conditionnement ----
-fprintf('\n   N      err_rel        cond(H)\n');
-for i = 1:length(Ns)
-    fprintf('  %5d   %.3e   %.3e\n', Ns(i), err_rel(i), cond_H(i));
-end
-
-% ---- Sensibilité à une perturbation ----
-% Désordre diagonal aléatoire d'amplitude eps*||H||
-N = 500; h = L/(N+1);
-T = (hbar^2/(2*m_e*h^2)) * ...
-    ( 2*diag(ones(N,1)) - diag(ones(N-1,1),1) - diag(ones(N-1,1),-1) );
-E0  = sort(eig(T))/eV;
-rng(0);
-eps_pert = 1e-6;
-E1_pert  = sort(eig(T + eps_pert*norm(T)*diag(randn(N,1))))/eV;
-fprintf('\nPerturbation relative E_1 : %.3e (eps = %.1e)\n', ...
-        abs(E1_pert(1)-E0(1))/E0(1), eps_pert);
-
-% ---- Tracé ----
-figure;
-loglog(Ns, err_rel, 'o-', 'LineWidth', 1.6, 'MarkerFaceColor','b'); hold on;
-ref = err_rel(1)*(Ns(1)./Ns).^2;
-loglog(Ns, ref, 'k--', 'LineWidth', 1.2);
-xlabel('N'); ylabel('Erreur relative sur E_1');
-title('Convergence : erreur ~ O(h^2)');
-legend('Numérique','Référence O(h^2)','Location','best');
-grid on;
-
-figure;
-loglog(Ns, cond_H, 's-', 'LineWidth', 1.6);
-xlabel('N'); ylabel('cond(H)');
-title('Conditionnement du Hamiltonien');
-grid on;
